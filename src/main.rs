@@ -1,13 +1,15 @@
+use std::borrow::BorrowMut;
+
 use ctru::{prelude::*, services::gfx::{Screen, self, Swap, RawFrameBuffer}};
 
 fn main() {
     let apt = Apt::new().unwrap();
     let mut hid = Hid::new().unwrap();
-    let gfx = Gfx::new().unwrap();
-    let console = Console::new(gfx.top_screen.borrow_mut());
+    let mut gfx = Gfx::new().unwrap();
+    //let console = Console::new(gfx.top_screen.borrow_mut());
     //println!("Hello, World!");
     //println!("\x1b[29;16HPress Start to exit");
-    let mut bottom_screen = gfx.bottom_screen.borrow_mut();
+    let mut bottom_screen = gfx.top_screen.get_mut();
     bottom_screen.set_double_buffering(false);
     bottom_screen.swap_buffers();
 

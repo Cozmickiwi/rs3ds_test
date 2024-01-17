@@ -21,7 +21,7 @@ struct Player {
     half_fov: u8,
     x: f32,
     y: f32,
-    angle: u8,
+    angle: u16,
 }
 
 const SCREEN_WIDTH: u16 = 400;
@@ -32,18 +32,20 @@ const SQUARE_COLOR_G: u8 = 0;
 const SQUARE_COLOR_B: u8 = 0;
 
 pub static SQUARE_COLOR: [u8; 3] = [SQUARE_COLOR_B, SQUARE_COLOR_G, SQUARE_COLOR_R];
+pub static SQUARE_COLOR2: [u8; 3] = [100, 0, 0];
+pub static SQUARE_COLOR3: [u8; 3] = [0, 100, 0];
 
 fn main() {
     let apt = Apt::new().unwrap();
     let mut hid = Hid::new().unwrap();
     let mut gfx = Gfx::new().unwrap();
-    let mut top_screen = gfx.top_screen.get_mut();
-    top_screen.swap_buffers();
-    let frame_buffer = top_screen.raw_framebuffer();
-    //let mut old_keys = KeyPad::empty();
+    //let mut top_screen = gfx.top_screen.get_mut();
+    //top_screen.swap_buffers();
+    //let frame_buffer = top_screen.raw_framebuffer();
+    let mut old_keys = KeyPad::empty();
     //draw_filled_rec(frame_buffer, 300, 100, 50, 15);
 
-    let player = Player {
+    let mut player = Player {
         fov: 60,
         half_fov: 30,
         x: 2.0,
@@ -51,8 +53,8 @@ fn main() {
         angle: 45,
     };
 
-    let ray_cast = RayCasting {
-        increment_angle: player.fov as f32 / frame_buffer.width as f32,
+    let mut ray_cast = RayCasting {
+        increment_angle: player.fov as f32 / SCREEN_WIDTH as f32,
         precision: 64,
     };
 
@@ -93,14 +95,46 @@ fn main() {
     ];
 
     //   let map: Matrix<u8, 10, 10, _> = Matrix::from_row_slice(&map_data);*/
-    ray_casting(player, ray_cast, map, &frame_buffer);
-    top_screen.flush_buffers();
-    top_screen.swap_buffers();
+//    ray_casting(player, ray_cast, map, &frame_buffer);
+   //top_screen.flush_buffers();
+    //top_screen.swap_buffers();
     while apt.main_loop() {
         hid.scan_input();
         if hid.keys_down().contains(KeyPad::START) {
             break;
         }
+        let keys = hid.keys_held();
+        //if keys != old_keys {
+        if keys.contains(KeyPad::DPAD_LEFT) {
+            player.angle -= 1;
+            if player.angle <= 0 {
+                player.angle = 360;
+            }
+            {
+                let mut top_screen = gfx.top_screen.get_mut();
+                top_screen.flush_buffers();
+                let frame_buffer = top_screen.raw_framebuffer();
+                (player, ray_cast) = ray_casting(player, ray_cast, map, &frame_buffer);
+                top_screen.flush_buffers();
+                top_screen.swap_buffers();
+            }
+        } else if keys.contains(KeyPad::DPAD_RIGHT) {
+            player.angle += 1;
+            if player.angle >= 360 {
+                player.angle = 1;
+            }
+            {
+                let mut top_screen = gfx.top_screen.get_mut();
+                top_screen.flush_buffers();
+                let frame_buffer = top_screen.raw_framebuffer();
+                (player, ray_cast) = ray_casting(player, ray_cast, map, &frame_buffer);
+                top_screen.flush_buffers();
+                top_screen.swap_buffers();
+            }
+        //}
+        }
+        old_keys = keys;
+        //(player, ray_cast) = ray_casting(player, ray_cast, map, &frame_buffer);
         gfx.wait_for_vblank();
     }
 }
@@ -133,7 +167,7 @@ fn draw_filled_rec(
             let new_y = y + i;
             if new_x < frame_buffer.height as u32 && new_y < frame_buffer.width as u32 {
                 let pixel_index = ((new_x) * frame_buffer.width as u32 + (new_y)) as usize * 3;
-                frame_buffer_slice[pixel_index..pixel_index + 3].copy_from_slice(&SQUARE_COLOR);
+                frame_buffer_slice[pixel_index..pixel_index + 3].copy_from_slice(color);
             } else {
                 println!(
                     "Invalid coordinates: ({}, {}) for buffer: {:#?}",
@@ -164,15 +198,15 @@ fn ray_casting(
     ray: RayCasting,
     map: [[u8; 10]; 10],
     frame_buffer: &RawFrameBuffer<'_>,
-) {
+) -> (Player, RayCasting) {
     let mut ray_angle = player.angle as f32 - player.half_fov as f32;
-    for i in 1..SCREEN_WIDTH {
+    for i in 1..SCREEN_WIDTH / 4 {
         let mut ray_struct = Ray {
             x: player.x,
             y: player.y,
         };
         //increment
-        ray_angle += ray.increment_angle;
+        ray_angle += ray.increment_angle * 4.0;
         //ray_angle += 1;
         let ray_rad = deg_to_rad(&ray_angle);
         let pres = ray.precision as f32;
@@ -198,11 +232,14 @@ fn ray_casting(
 
         draw_filled_rec(
             frame_buffer,
-            i.into(),
+            i as u32 * 4,
             wall_start,
-            1,
+            4,
             wall_height as u32 * 2,
             &SQUARE_COLOR,
         );
+        draw_filled_rec(frame_buffer, i as u32 * 4, 0, 4, wall_start, &SQUARE_COLOR3);
+        draw_filled_rec(frame_buffer, i as u32 * 4, (wall_start + (wall_height as u32 * 2)), 4, SCREEN_HEIGHT as u32 - (wall_start + (wall_height as u32 * 2)), &SQUARE_COLOR2);
     }
+    return (player, ray);
 }

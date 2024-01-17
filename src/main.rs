@@ -21,7 +21,7 @@ struct Player {
     half_fov: u8,
     x: f32,
     y: f32,
-    angle: u16,
+    angle: i16,
 }
 
 const SCREEN_WIDTH: u16 = 400;
@@ -39,12 +39,7 @@ fn main() {
     let apt = Apt::new().unwrap();
     let mut hid = Hid::new().unwrap();
     let mut gfx = Gfx::new().unwrap();
-    //let mut top_screen = gfx.top_screen.get_mut();
-    //top_screen.swap_buffers();
-    //let frame_buffer = top_screen.raw_framebuffer();
     let mut old_keys = KeyPad::empty();
-    //draw_filled_rec(frame_buffer, 300, 100, 50, 15);
-
     let mut player = Player {
         fov: 60,
         half_fov: 30,
@@ -52,35 +47,10 @@ fn main() {
         y: 2.0,
         angle: 45,
     };
-
     let mut ray_cast = RayCasting {
         increment_angle: player.fov as f32 / SCREEN_WIDTH as f32,
         precision: 64,
     };
-
-    /*let map = matrix![
-        1, 1, 1, 1, 1, 1, 1, 1, 1, 1;
-        1, 0, 0, 0, 0, 0, 0, 0, 0, 1;
-        1, 0, 0, 0, 0, 0, 0, 0, 0, 1;
-        1, 0, 0, 1, 1, 0, 1, 0, 0, 1;
-        1, 0, 0, 1, 0, 0, 1, 0, 0, 1;
-        1, 0, 0, 1, 0, 0, 1, 0, 0, 1;
-        1, 0, 0, 1, 0, 1, 1, 0, 0, 1;
-        1, 0, 0, 0, 0, 0, 0, 0, 0, 1;
-        1, 0, 0, 0, 0, 0, 0, 0, 0, 1;
-        1, 1, 1, 1, 1, 1, 1, 1, 1, 1
-    ];
-
-    for i in 0..10 {
-        draw_filled_rec(
-            &frame_buffer,
-            100 + (i * 10 as u32),
-            100,
-            30,
-            30,
-            &SQUARE_COLOR,
-        );
-    }*/
     let map: [[u8; 10]; 10] = [
         [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
         [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
@@ -94,21 +64,18 @@ fn main() {
         [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     ];
 
-    //   let map: Matrix<u8, 10, 10, _> = Matrix::from_row_slice(&map_data);*/
-//    ray_casting(player, ray_cast, map, &frame_buffer);
-   //top_screen.flush_buffers();
-    //top_screen.swap_buffers();
+    let mut custom_rot = 0.0;
+    let mut custom_rot_y = 0.0;
     while apt.main_loop() {
         hid.scan_input();
         if hid.keys_down().contains(KeyPad::START) {
             break;
         }
         let keys = hid.keys_held();
-        //if keys != old_keys {
         if keys.contains(KeyPad::DPAD_LEFT) {
-            player.angle -= 1;
+            player.angle -= 2;
             if player.angle <= 0 {
-                player.angle = 360;
+                player.angle = 359;
             }
             {
                 let mut top_screen = gfx.top_screen.get_mut();
@@ -119,7 +86,7 @@ fn main() {
                 top_screen.swap_buffers();
             }
         } else if keys.contains(KeyPad::DPAD_RIGHT) {
-            player.angle += 1;
+            player.angle += 2;
             if player.angle >= 360 {
                 player.angle = 1;
             }
@@ -131,10 +98,31 @@ fn main() {
                 top_screen.flush_buffers();
                 top_screen.swap_buffers();
             }
-        //}
+        } else if keys.contains(KeyPad::DPAD_UP) {
+            let x_speed = 1.0 - (custom_rot * 2.0);
+            let mut y_speed = 0.0;
+            //player.x += (0.02 * (1.0 - (custom_rot * 2.0)));
+            //player.y += (0.02 * y_speed);
+            let angle = player.angle as f32;
+            player.x += 0.02 * deg_to_rad(&angle).cos();
+            player.y += 0.02 * deg_to_rad(&angle).sin();
+            {
+                let mut top_screen = gfx.top_screen.get_mut();
+                top_screen.flush_buffers();
+                let frame_buffer = top_screen.raw_framebuffer();
+                (player, ray_cast) = ray_casting(player, ray_cast, map, &frame_buffer);
+                top_screen.flush_buffers();
+                top_screen.swap_buffers();
+            }
+        }
+        if player.angle > 0 {
+            if player.angle <= 180 {
+                custom_rot = player.angle as f32 / 180.0;
+            } else {
+                custom_rot = 2.0 - (player.angle as f32 / 180.0);
+            }
         }
         old_keys = keys;
-        //(player, ray_cast) = ray_casting(player, ray_cast, map, &frame_buffer);
         gfx.wait_for_vblank();
     }
 }
@@ -207,7 +195,6 @@ fn ray_casting(
         };
         //increment
         ray_angle += ray.increment_angle * 4.0;
-        //ray_angle += 1;
         let ray_rad = deg_to_rad(&ray_angle);
         let pres = ray.precision as f32;
         let ray_cos = ray_rad.cos() / pres;
@@ -217,8 +204,6 @@ fn ray_casting(
         while wall == 0 {
             ray_struct.x += ray_cos;
             ray_struct.y += ray_sin;
-            //wall = map.index((ray_struct.y as u16, ray_struct.x as u16));
-            //            wall = (map[ray_struct.x as usize])[ray_struct.y as usize];
             wall = map[ray_struct.y as usize][ray_struct.x as usize];
         }
         let distance = ((player.x as f32 - ray_struct.x as f32).powi(2)
@@ -229,7 +214,6 @@ fn ray_casting(
         let half_wall_height = wall_height / 2.0;
         let wall_start = 120 - wall_height as u32;
         let roof_start = 120 + wall_height as u32;
-
         draw_filled_rec(
             frame_buffer,
             i as u32 * 4,
@@ -239,7 +223,14 @@ fn ray_casting(
             &SQUARE_COLOR,
         );
         draw_filled_rec(frame_buffer, i as u32 * 4, 0, 4, wall_start, &SQUARE_COLOR3);
-        draw_filled_rec(frame_buffer, i as u32 * 4, (wall_start + (wall_height as u32 * 2)), 4, SCREEN_HEIGHT as u32 - (wall_start + (wall_height as u32 * 2)), &SQUARE_COLOR2);
+        draw_filled_rec(
+            frame_buffer,
+            i as u32 * 4,
+            (wall_start + (wall_height as u32 * 2)),
+            4,
+            SCREEN_HEIGHT as u32 - (wall_start + (wall_height as u32 * 2)),
+            &SQUARE_COLOR2,
+        );
     }
     return (player, ray);
 }

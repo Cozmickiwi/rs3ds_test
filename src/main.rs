@@ -15,7 +15,7 @@ fn main() {
     top_screen.swap_buffers();
     let frame_buffer = top_screen.raw_framebuffer();
     let mut old_keys = KeyPad::empty();
-    draw_filled_square(frame_buffer, 380, 200, 10);
+    draw_filled_square(frame_buffer, 300, 100, 50, 15);
     top_screen.flush_buffers();
     top_screen.swap_buffers();
     while apt.main_loop() {
@@ -31,7 +31,7 @@ const SQUARE_COLOR_G: u8 = 0;
 const SQUARE_COLOR_B: u8 = 0;
 
 static SQUARE_COLOR: [u8; 3] = [SQUARE_COLOR_B, SQUARE_COLOR_G, SQUARE_COLOR_R];
-fn draw_filled_square(frame_buffer: RawFrameBuffer<'_>, x: u32, y: u32, size: u32) {
+fn draw_filled_square(frame_buffer: RawFrameBuffer<'_>, x: u32, y: u32, width: u32, height: u32) {
     let frame_buffer_slice = unsafe {
         std::slice::from_raw_parts_mut(
             frame_buffer.ptr,
@@ -42,8 +42,8 @@ fn draw_filled_square(frame_buffer: RawFrameBuffer<'_>, x: u32, y: u32, size: u3
         "Buffer dimensions: {} x {}",
         frame_buffer.width, frame_buffer.height
     );
-    for i in 0..size {
-        for a in 0..size {
+    for i in 0..height {
+        for a in 0..width {
             let new_x = x + a;
             let new_y = y + i;
             if new_x < frame_buffer.height as u32 && new_y < frame_buffer.width as u32 {

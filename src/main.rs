@@ -1,4 +1,5 @@
 use std::borrow::BorrowMut;
+use std::cmp::min;
 use std::f32::consts::PI;
 use std::fs::File;
 use std::io::{self, Write};
@@ -34,6 +35,27 @@ const SQUARE_COLOR_B: u8 = 0;
 pub static SQUARE_COLOR: [u8; 3] = [SQUARE_COLOR_B, SQUARE_COLOR_G, SQUARE_COLOR_R];
 pub static SQUARE_COLOR2: [u8; 3] = [100, 0, 0];
 pub static SQUARE_COLOR3: [u8; 3] = [0, 100, 0];
+
+struct TextureBitmap {
+    size: u8,
+    bit_map: [[u8; 8]; 8],
+    colors: [[u8; 3]; 2],
+}
+
+pub static GREY_BRICK: TextureBitmap = TextureBitmap {
+    size: 8,
+    bit_map: [
+        [1, 1, 1, 1, 1, 1, 1, 1],
+        [0, 0, 0, 1, 0, 0, 0, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1],
+        [0, 1, 0, 0, 0, 1, 0, 0],
+        [1, 1, 1, 1, 1, 1, 1, 1],
+        [0, 0, 0, 1, 0, 0, 0, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1],
+        [0, 1, 0, 0, 0, 1, 0, 0],
+    ],
+    colors: [[232, 241, 255], [199, 195, 194]],
+};
 
 fn main() {
     let apt = Apt::new().unwrap();
@@ -100,10 +122,21 @@ fn main() {
             let angle = player.angle as f32;
             let pcos = 0.04 * deg_to_rad(&angle).cos();
             let psin = 0.04 * deg_to_rad(&angle).sin();
-            if map[(psin + player.y) as usize][(pcos + player.x) as usize] == 0 {
-                player.x += pcos;
-                player.y += psin;
+            let new_x = player.x + pcos;
+            let new_y = player.y + psin;
+            let check_x = (new_x + pcos * 20.0) as usize;
+            let check_y = (new_y + psin * 20.0) as usize;
+            if map[check_y][player.x as usize] == 0 {
+                player.y = new_y;
             }
+            if map[player.y as usize][check_x] == 0 {
+                player.x = new_x;
+            }
+            /*
+            if map[new_y as usize][new_x as usize] == 0 {
+                player.x = new_x;
+                player.y = new_y;
+            }*/
             //player.x += 0.02 * deg_to_rad(&angle).cos();
             //player.y += 0.02 * deg_to_rad(&angle).sin();
             {
@@ -148,7 +181,9 @@ fn draw_filled_rec(
     y: u32,
     width: u32,
     height: u32,
-    color: &[u8],
+    color: &[u8; 3],
+    texture: bool,
+    texture_slice: Vec<u8>,
 ) {
     let frame_buffer_slice = unsafe {
         std::slice::from_raw_parts_mut(
@@ -156,17 +191,44 @@ fn draw_filled_rec(
             ((frame_buffer.height * frame_buffer.width) * 3) as usize,
         )
     };
-    println!(
-        "Buffer dimensions: {} x {}",
-        frame_buffer.width, frame_buffer.height
-    );
-    for i in 0..height {
+    let mut step: f32 = 0.0;
+    let mut chosen_color = color;
+    let mut prev_index: usize = 0;
+    let mut inc: u32 = 0;
+    if texture {
+        //step = height as f32 / GREY_BRICK.size as f32;
+        if height > 240 {
+            if height % 2 == 0 {
+                inc = (height - 240) / 2;
+            } else {
+                inc = (height - 239) / 2;
+            }
+        }
+        step = min(height, 240) as f32 / GREY_BRICK.size as f32;
+    }
+    for i in 0..min(height, 240) {
+        if texture {
+            if i > 0 {
+                let x = ((i + inc) as f32 / step) as usize;
+                if x > prev_index {
+                    prev_index = x;
+                    let max: usize;
+                    if inc > 0 {
+                        max = 7 - (inc as f32 / step) as usize;
+                    }
+                    if prev_index > 7 {
+                        prev_index = 7;
+                    }
+                }
+            }
+            chosen_color = &GREY_BRICK.colors[texture_slice[prev_index] as usize];
+        }
         for a in 0..width {
             let new_x = x + a;
             let new_y = y + i;
             if new_x < frame_buffer.height as u32 && new_y < frame_buffer.width as u32 {
                 let pixel_index = ((new_x) * frame_buffer.width as u32 + (new_y)) as usize * 3;
-                frame_buffer_slice[pixel_index..pixel_index + 3].copy_from_slice(color);
+                frame_buffer_slice[pixel_index..pixel_index + 3].copy_from_slice(chosen_color);
             } else {
                 println!(
                     "Invalid coordinates: ({}, {}) for buffer: {:#?}",
@@ -217,40 +279,67 @@ fn ray_casting(
             ray_struct.y += ray_sin;
             wall = map[ray_struct.y as usize][ray_struct.x as usize];
         }
-        let mut distance = ((player.x - ray_struct.x).powi(2)
-            + (player.y - ray_struct.y).powi(2))
-        .sqrt();
-        // wall height
-        
-        //let mut file = File::create("output.txt").expect("Failed to create output.txt");
-        //let time = Instant::now();
-        //writeln!(file, "{distance}").expect("Failed to write to file");
+        let mut distance =
+            ((player.x - ray_struct.x).powi(2) + (player.y - ray_struct.y).powi(2)).sqrt();
         let panglef = ray_angle - player.angle as f32;
+        // wall height
         distance = distance * (deg_to_rad(&panglef)).cos();
-        if distance <= 1.0 {
-            distance = 1.0;
-        }
+        //if distance <= 1.0 {
+        //    distance = 1.0;
+        //}
         let wall_height = 120.0 / distance;
         let half_wall_height = wall_height / 2.0;
-        let wall_start = 120 - wall_height as u32;
-        let roof_start = 120 + wall_height as u32;
+        let mut wall_start = 120 - wall_height as u32;
+        let mut roof_start = 120 + wall_height as u32;
+        if distance <= 1.0 {
+            wall_start = 1;
+            roof_start = 240;
+        }
+        let texture_pos_x =
+            ((GREY_BRICK.size * (ray_struct.x + ray_struct.y) as u8) % GREY_BRICK.size) as usize;
+        let texture_slice = get_texture_slice(texture_pos_x);
         draw_filled_rec(
             frame_buffer,
             i as u32 * 4,
-            wall_start,
+            wall_start - 1,
             4,
             wall_height as u32 * 2,
             &SQUARE_COLOR,
+            true,
+            texture_slice,
         );
-        draw_filled_rec(frame_buffer, i as u32 * 4, 0, 4, wall_start, &SQUARE_COLOR3);
-        draw_filled_rec(
-            frame_buffer,
-            i as u32 * 4,
-            (wall_start + (wall_height as u32 * 2)),
-            4,
-            SCREEN_HEIGHT as u32 - (wall_start + (wall_height as u32 * 2)),
-            &SQUARE_COLOR2,
-        );
+        let empty_vec: Vec<u8> = vec![];
+        let empty_vec2: Vec<u8> = vec![];
+        if distance >= 1.0 {
+            draw_filled_rec(
+                frame_buffer,
+                i as u32 * 4,
+                0,
+                4,
+                wall_start,
+                &SQUARE_COLOR3,
+                false,
+                empty_vec,
+            );
+            draw_filled_rec(
+                frame_buffer,
+                i as u32 * 4,
+                (wall_start + (wall_height as u32 * 2)),
+                4,
+                SCREEN_HEIGHT as u32 - (wall_start + (wall_height as u32 * 2)),
+                &SQUARE_COLOR2,
+                false,
+                empty_vec2,
+            );
+        }
     }
     return (player, ray);
+}
+
+fn get_texture_slice(texture_pos_x: usize) -> Vec<u8> {
+    let mut tslice: Vec<u8> = Vec::new();
+    for i in GREY_BRICK.bit_map.iter() {
+        tslice.push(i[texture_pos_x]);
+    }
+    tslice
 }

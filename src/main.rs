@@ -114,6 +114,24 @@ fn main() {
                 top_screen.flush_buffers();
                 top_screen.swap_buffers();
             }
+        } else if keys.contains(KeyPad::DPAD_DOWN) {
+            let angle = player.angle as f32;
+            let pcos = 0.04 * deg_to_rad(&angle).cos();
+            let psin = 0.04 * deg_to_rad(&angle).sin();
+            if map[(psin + player.y) as usize][(pcos + player.x) as usize] == 0 {
+                player.x -= pcos;
+                player.y -= psin;
+            }
+            //player.x += 0.02 * deg_to_rad(&angle).cos();
+            //player.y += 0.02 * deg_to_rad(&angle).sin();
+            {
+                let mut top_screen = gfx.top_screen.get_mut();
+                top_screen.flush_buffers();
+                let frame_buffer = top_screen.raw_framebuffer();
+                (player, ray_cast) = ray_casting(player, ray_cast, map, &frame_buffer);
+                top_screen.flush_buffers();
+                top_screen.swap_buffers();
+            }
         }
         old_keys = keys;
         gfx.wait_for_vblank();
@@ -207,6 +225,8 @@ fn ray_casting(
         //let mut file = File::create("output.txt").expect("Failed to create output.txt");
         //let time = Instant::now();
         //writeln!(file, "{distance}").expect("Failed to write to file");
+        let panglef = ray_angle - player.angle as f32;
+        distance = distance * (deg_to_rad(&panglef)).cos();
         if distance <= 1.0 {
             distance = 1.0;
         }

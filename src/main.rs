@@ -9,7 +9,7 @@ use ctru::{
     prelude::*,
     services::gfx::{self, Flush, RawFrameBuffer, Screen, Swap, TopScreen, TopScreenLeft},
 };
-use nalgebra::{matrix, Matrix};
+use nalgebra::{matrix, Matrix, Point2};
 
 struct RayCasting {
     increment_angle: f32,
@@ -64,8 +64,6 @@ fn main() {
         [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     ];
 
-    let mut custom_rot = 0.0;
-    let mut custom_rot_y = 0.0;
     while apt.main_loop() {
         hid.scan_input();
         if hid.keys_down().contains(KeyPad::START) {
@@ -99,13 +97,15 @@ fn main() {
                 top_screen.swap_buffers();
             }
         } else if keys.contains(KeyPad::DPAD_UP) {
-            let x_speed = 1.0 - (custom_rot * 2.0);
-            let mut y_speed = 0.0;
-            //player.x += (0.02 * (1.0 - (custom_rot * 2.0)));
-            //player.y += (0.02 * y_speed);
             let angle = player.angle as f32;
-            player.x += 0.02 * deg_to_rad(&angle).cos();
-            player.y += 0.02 * deg_to_rad(&angle).sin();
+            let pcos = 0.04 * deg_to_rad(&angle).cos();
+            let psin = 0.04 * deg_to_rad(&angle).sin();
+            if map[(psin + player.y) as usize][(pcos + player.x) as usize] == 0 {
+                player.x += pcos;
+                player.y += psin;
+            }
+            //player.x += 0.02 * deg_to_rad(&angle).cos();
+            //player.y += 0.02 * deg_to_rad(&angle).sin();
             {
                 let mut top_screen = gfx.top_screen.get_mut();
                 top_screen.flush_buffers();
@@ -113,13 +113,6 @@ fn main() {
                 (player, ray_cast) = ray_casting(player, ray_cast, map, &frame_buffer);
                 top_screen.flush_buffers();
                 top_screen.swap_buffers();
-            }
-        }
-        if player.angle > 0 {
-            if player.angle <= 180 {
-                custom_rot = player.angle as f32 / 180.0;
-            } else {
-                custom_rot = 2.0 - (player.angle as f32 / 180.0);
             }
         }
         old_keys = keys;
@@ -206,10 +199,17 @@ fn ray_casting(
             ray_struct.y += ray_sin;
             wall = map[ray_struct.y as usize][ray_struct.x as usize];
         }
-        let distance = ((player.x as f32 - ray_struct.x as f32).powi(2)
-            + (player.y as f32 - ray_struct.y as f32).powi(2))
+        let mut distance = ((player.x - ray_struct.x).powi(2)
+            + (player.y - ray_struct.y).powi(2))
         .sqrt();
         // wall height
+        
+        //let mut file = File::create("output.txt").expect("Failed to create output.txt");
+        //let time = Instant::now();
+        //writeln!(file, "{distance}").expect("Failed to write to file");
+        if distance <= 1.0 {
+            distance = 1.0;
+        }
         let wall_height = 120.0 / distance;
         let half_wall_height = wall_height / 2.0;
         let wall_start = 120 - wall_height as u32;

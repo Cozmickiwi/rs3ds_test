@@ -183,7 +183,9 @@ fn draw_filled_rec(
     height: u32,
     color: &[u8; 3],
     texture: bool,
+    texture2: bool,
     texture_slice: Vec<u8>,
+    texture_slice_2: &[u8],
 ) {
     let frame_buffer_slice = unsafe {
         std::slice::from_raw_parts_mut(
@@ -226,6 +228,9 @@ fn draw_filled_rec(
         for a in 0..width {
             let new_x = x + a;
             let new_y = y + i;
+            if texture2 {
+                chosen_color = &GREY_BRICK.colors[texture_slice_2[i as usize] as usize];
+            }
             if new_x < frame_buffer.height as u32 && new_y < frame_buffer.width as u32 {
                 let pixel_index = ((new_x) * frame_buffer.width as u32 + (new_y)) as usize * 3;
                 frame_buffer_slice[pixel_index..pixel_index + 3].copy_from_slice(chosen_color);
@@ -298,6 +303,22 @@ fn ray_casting(
         let texture_pos_x =
             ((GREY_BRICK.size * (ray_struct.x + ray_struct.y) as u8) % GREY_BRICK.size) as usize;
         let texture_slice = get_texture_slice(texture_pos_x);
+        let true_height = wall_height as u32 * 2;
+        let v_tex_vec = get_vert_tex_map(&texture_slice, &true_height);
+        let v_tex_slice: &[u8];
+        if v_tex_vec.len() <= 240 {
+            v_tex_slice = &v_tex_vec[..];
+        } else {
+            let overflow = v_tex_vec.len() - 240;
+            let mut half_overflow: usize;
+            if overflow % 2 == 0 {
+                half_overflow = overflow / 2;
+            } else {
+                half_overflow = (overflow + 1) / 2;
+            }
+            v_tex_slice = &v_tex_vec[half_overflow..(v_tex_vec.len() - half_overflow)];
+        }
+        let empty_vec3: Vec<u8> = vec![];
         draw_filled_rec(
             frame_buffer,
             i as u32 * 4,
@@ -305,11 +326,15 @@ fn ray_casting(
             4,
             wall_height as u32 * 2,
             &SQUARE_COLOR,
+            false,
             true,
-            texture_slice,
+            empty_vec3,
+            v_tex_slice,
         );
         let empty_vec: Vec<u8> = vec![];
         let empty_vec2: Vec<u8> = vec![];
+        let empty_slice: &[u8] = &[];
+        let empty_slice2: &[u8] = &[];
         if distance >= 1.0 {
             draw_filled_rec(
                 frame_buffer,
@@ -319,7 +344,9 @@ fn ray_casting(
                 wall_start,
                 &SQUARE_COLOR3,
                 false,
+                false,
                 empty_vec,
+                empty_slice,
             );
             draw_filled_rec(
                 frame_buffer,
@@ -329,7 +356,9 @@ fn ray_casting(
                 SCREEN_HEIGHT as u32 - (wall_start + (wall_height as u32 * 2)),
                 &SQUARE_COLOR2,
                 false,
+                false,
                 empty_vec2,
+                empty_slice2,
             );
         }
     }
@@ -342,4 +371,37 @@ fn get_texture_slice(texture_pos_x: usize) -> Vec<u8> {
         tslice.push(i[texture_pos_x]);
     }
     tslice
+}
+
+fn get_vert_tex_map<'a>(t_slice: &'a Vec<u8>, height: &'a u32) -> Vec<u8> {
+    let mut v_map: Vec<u8> = Vec::new();
+    let mut prev_index = 0;
+    let step = *height as f32 / 8.0;
+    for i in 1..height + 1 {
+        let x = (i as f32 / step) as usize;
+        if x > prev_index {
+            prev_index = x;
+            let max: usize;
+            if prev_index > 7 {
+                prev_index = 7;
+            }
+        }
+        v_map.push(t_slice[prev_index]);
+    }
+    return v_map;
+    /*
+    if v_map.len() <= 240 {
+        //let v_slice: &[u8] = &v_map[..];
+        return v_map;
+    }
+    let overflow = v_map.len() - 240;
+    let mut half_overflow: usize;
+    if overflow % 2 == 0 {
+        half_overflow = overflow / 2;
+    } else {
+        half_overflow = (overflow + 1) / 2;
+    }
+    let v_slice: &[u8] = v_map[half_overflow..(*height as usize - half_overflow)];
+    return &v_slice;
+    */
 }

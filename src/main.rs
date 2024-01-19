@@ -27,6 +27,7 @@ struct Player {
 
 const SCREEN_WIDTH: u16 = 400;
 const SCREEN_HEIGHT: u16 = 240;
+const SCALE: u32 = 4;
 
 const SQUARE_COLOR_R: u8 = 255;
 const SQUARE_COLOR_G: u8 = 0;
@@ -58,6 +59,9 @@ pub static GREY_BRICK: TextureBitmap = TextureBitmap {
 };
 
 fn main() {
+    if SCALE == 0 {
+        panic!();
+    }
     let apt = Apt::new().unwrap();
     let mut hid = Hid::new().unwrap();
     let mut gfx = Gfx::new().unwrap();
@@ -266,13 +270,13 @@ fn ray_casting(
     frame_buffer: &RawFrameBuffer<'_>,
 ) -> (Player, RayCasting) {
     let mut ray_angle = player.angle as f32 - player.half_fov as f32;
-    for i in 1..SCREEN_WIDTH / 4 {
+    for i in 1..SCREEN_WIDTH / SCALE as u16 {
         let mut ray_struct = Ray {
             x: player.x,
             y: player.y,
         };
         //increment
-        ray_angle += ray.increment_angle * 4.0;
+        ray_angle += ray.increment_angle * SCALE as f32;
         let ray_rad = deg_to_rad(&ray_angle);
         let pres = ray.precision as f32;
         let ray_cos = ray_rad.cos() / pres;
@@ -310,7 +314,7 @@ fn ray_casting(
             v_tex_slice = &v_tex_vec[..];
         } else {
             let overflow = v_tex_vec.len() - 240;
-            let mut half_overflow: usize;
+            let half_overflow: usize;
             if overflow % 2 == 0 {
                 half_overflow = overflow / 2;
             } else {
@@ -321,9 +325,9 @@ fn ray_casting(
         let empty_vec3: Vec<u8> = vec![];
         draw_filled_rec(
             frame_buffer,
-            i as u32 * 4,
+            i as u32 * SCALE,
             wall_start - 1,
-            4,
+            SCALE,
             wall_height as u32 * 2,
             &SQUARE_COLOR,
             false,
@@ -331,16 +335,17 @@ fn ray_casting(
             empty_vec3,
             v_tex_slice,
         );
-        let empty_vec: Vec<u8> = vec![];
-        let empty_vec2: Vec<u8> = vec![];
-        let empty_slice: &[u8] = &[];
-        let empty_slice2: &[u8] = &[];
-        if distance >= 1.0 {
+
+        if wall_height < 120.0 {
+            let empty_vec: Vec<u8> = vec![];
+            let empty_vec2: Vec<u8> = vec![];
+            let empty_slice: &[u8] = &[];
+            let empty_slice2: &[u8] = &[];
             draw_filled_rec(
                 frame_buffer,
-                i as u32 * 4,
+                i as u32 * SCALE,
                 0,
-                4,
+                SCALE,
                 wall_start,
                 &SQUARE_COLOR3,
                 false,
@@ -350,9 +355,9 @@ fn ray_casting(
             );
             draw_filled_rec(
                 frame_buffer,
-                i as u32 * 4,
+                i as u32 * SCALE,
                 (wall_start + (wall_height as u32 * 2)),
-                4,
+                SCALE,
                 SCREEN_HEIGHT as u32 - (wall_start + (wall_height as u32 * 2)),
                 &SQUARE_COLOR2,
                 false,
@@ -374,14 +379,13 @@ fn get_texture_slice(texture_pos_x: usize) -> Vec<u8> {
 }
 
 fn get_vert_tex_map<'a>(t_slice: &'a Vec<u8>, height: &'a u32) -> Vec<u8> {
-    let mut v_map: Vec<u8> = Vec::new();
+    let mut v_map: Vec<u8> = Vec::with_capacity(*height as usize);
     let mut prev_index = 0;
     let step = *height as f32 / 8.0;
-    for i in 1..height + 1 {
+    for i in (1..height + 1) {
         let x = (i as f32 / step) as usize;
         if x > prev_index {
             prev_index = x;
-            let max: usize;
             if prev_index > 7 {
                 prev_index = 7;
             }

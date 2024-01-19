@@ -10,3 +10,7 @@ nalgebra = "0.32.3"
 
 [package.metadata.cargo-3ds]
 romfs_dir = "romfs"
+
+[profile.release]
+opt-level = 3
+lto = true

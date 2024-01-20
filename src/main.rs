@@ -21,7 +21,7 @@ struct Player {
 
 const SCREEN_WIDTH: u16 = 400;
 const SCREEN_HEIGHT: u16 = 240;
-const SCALE: u32 = 5;
+const SCALE: u32 = 6;
 
 const SQUARE_COLOR_R: u8 = 255;
 const SQUARE_COLOR_G: u8 = 0;
@@ -50,6 +50,21 @@ pub static GREY_BRICK: TextureBitmap = TextureBitmap {
         [0, 1, 0, 0, 0, 1, 0, 0],
     ],
     colors: [[232, 241, 255], [199, 195, 194]],
+};
+
+pub static PLACEHOLDER: TextureBitmap = TextureBitmap {
+    size: 8,
+    bit_map: [
+        [1, 1, 1, 1, 0, 0, 0, 0],
+        [1, 1, 1, 1, 0, 0, 0, 0],
+        [1, 1, 1, 1, 0, 0, 0, 0],
+        [1, 1, 1, 1, 0, 0, 0, 0],
+        [0, 0, 0, 0, 1, 1, 1, 1],
+        [0, 0, 0, 0, 1, 1, 1, 1],
+        [0, 0, 0, 0, 1, 1, 1, 1],
+        [0, 0, 0, 0, 1, 1, 1, 1],
+    ],
+    colors: [[128, 0, 128], [0, 0, 0]],
 };
 
 fn main() {
@@ -174,25 +189,21 @@ fn draw_filled_rec(
     color: &[u8; 3],
     texture: bool,
     texture_slice: &[u8],
+    frame_buffer_slice: &mut [u8],
 ) {
-    let frame_buffer_slice = unsafe {
-        std::slice::from_raw_parts_mut(
-            frame_buffer.ptr,
-            ((frame_buffer.height * frame_buffer.width) * 3) as usize,
-        )
-    };
+
     let mut chosen_color = color;
     for i in 0..min(height, 240) {
         for a in 0..width {
             let new_x = x + a;
             let new_y = y + i;
             if texture {
-                chosen_color = &GREY_BRICK.colors[texture_slice[i as usize] as usize];
+                chosen_color = &PLACEHOLDER.colors[texture_slice[i as usize] as usize];
             }
-            if new_x < frame_buffer.height as u32 && new_y < frame_buffer.width as u32 {
+            //if new_x < frame_buffer.height as u32 && new_y < frame_buffer.width as u32 {
                 let pixel_index = ((new_x) * frame_buffer.width as u32 + (new_y)) as usize * 3;
                 frame_buffer_slice[pixel_index..pixel_index + 3].copy_from_slice(chosen_color);
-            }
+            //}
         }
     }
 }
@@ -210,6 +221,12 @@ fn ray_casting(
 ) -> (Player, RayCasting) {
     let mut ray_angle = player.angle as f32 - player.half_fov as f32;
     let mut line_vec: Vec<u8> = Vec::with_capacity(240);
+    let frame_buffer_slice = unsafe {
+        std::slice::from_raw_parts_mut(
+            frame_buffer.ptr,
+            ((frame_buffer.height * frame_buffer.width) * 3) as usize,
+        )
+    };
     for i in 1..SCREEN_WIDTH / SCALE as u16 {
         let mut ray_struct = Ray {
             x: player.x,
@@ -233,13 +250,14 @@ fn ray_casting(
         let panglef = ray_angle - player.angle as f32;
         // wall height
         distance = distance * (deg_to_rad(&panglef)).cos();
-        let wall_height = 120.0 / distance;
+        let wall_height = (120.0 / distance);
         let mut wall_start = 120 - wall_height as u32;
         if distance <= 1.0 {
             wall_start = 1;
         }
         let texture_pos_x =
-            ((GREY_BRICK.size * (ray_struct.x + ray_struct.y) as u8) % GREY_BRICK.size) as usize;
+            ((GREY_BRICK.size as f32 * (ray_struct.x + ray_struct.y)) % GREY_BRICK.size as f32) as usize;
+        //let texture_pos_x = 0;
         let texture_slice = get_texture_slice(texture_pos_x);
         let true_height = wall_height as u32 * 2;
         line_vec = get_vert_tex_map(&texture_slice, &true_height, line_vec);
@@ -266,6 +284,7 @@ fn ray_casting(
             &SQUARE_COLOR,
             true,
             v_tex_slice,
+            frame_buffer_slice,
         );
         if wall_height < 120.0 {
             let empty_slice: &[u8] = &[];
@@ -279,6 +298,7 @@ fn ray_casting(
                 &SQUARE_COLOR3,
                 false,
                 empty_slice,
+                frame_buffer_slice,
             );
             draw_filled_rec(
                 frame_buffer,
@@ -289,6 +309,7 @@ fn ray_casting(
                 &SQUARE_COLOR2,
                 false,
                 empty_slice2,
+                frame_buffer_slice,
             );
         }
         line_vec.clear();
@@ -299,7 +320,7 @@ fn ray_casting(
 
 fn get_texture_slice(texture_pos_x: usize) -> Vec<u8> {
     let mut tslice: Vec<u8> = Vec::new();
-    for i in GREY_BRICK.bit_map.iter() {
+    for i in PLACEHOLDER.bit_map.iter() {
         tslice.push(i[texture_pos_x]);
     }
     tslice
